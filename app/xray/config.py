@@ -217,9 +217,8 @@ class XRayConfig(dict):
                     settings['tls'] = 'reality'
                     settings['sni'] = tls_settings.get('serverNames', [])
 
-                    try:
-                        settings['pbk'] = tls_settings['publicKey']
-                    except KeyError:
+                    settings['pbk'] = tls_settings.get('password', tls_settings.get('publicKey'))
+                    if not settings['pbk']:
                         pvk = tls_settings.get('privateKey')
                         if not pvk:
                             raise ValueError(
