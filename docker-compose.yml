@@ -1,8 +1,18 @@
 services:
   marzban:
-    image: gozargah/marzban:latest
+    # image: gozargah/marzban:latest
+    build: .
     restart: always
     env_file: .env
     network_mode: host
     volumes:
-      - /var/lib/marzban:/var/lib/marzban
+      - ./data:/var/lib/marzban
+    ports:
+      - "8443:8443"
+  proxy:
+    image: alpine/socat
+    # Слушаем внешний порт 8080, перенаправляем в host-сеть ВМ на порт приложения
+    command: TCP-LISTEN:8080,fork,reuseaddr TCP:127.0.0.1:8000
+    network_mode: host
+    ports:
+      - "127.0.0.1:8080:8080"
