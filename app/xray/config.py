@@ -233,7 +233,7 @@ class XRayConfig(dict):
 
                         if not settings.get('pbk'):
                             raise ValueError(
-                                f"You need to provide publicKey in realitySettings of {inbound['tag']}")
+                                f"You need to provide password (publicKey) in realitySettings of {inbound['tag']}")
 
                     try:
                         settings['sids'] = tls_settings.get('shortIds')
