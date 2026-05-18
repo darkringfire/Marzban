@@ -11,6 +11,9 @@ COMPOSE_FILE="$APP_DIR/docker-compose.yml"
 ENV_FILE="$APP_DIR/.env"
 LAST_XRAY_CORES=10
 
+BRANCH="master"
+
+
 colorized_echo() {
     local color=$1
     local text=$2
@@ -217,7 +220,88 @@ edit_env_command() {
     fi
 }
 
+install_yq() {
+    if command -v yq &>/dev/null; then
+        colorized_echo green "yq is already installed."
+        return
+    fi
+
+    identify_the_operating_system_and_architecture
+
+    local base_url="https://github.com/mikefarah/yq/releases/latest/download"
+    local yq_binary=""
+
+    case "$ARCH" in
+        '64' | 'x86_64')
+            yq_binary="yq_linux_amd64"
+            ;;
+        'arm32-v7a' | 'arm32-v6' | 'arm32-v5' | 'armv7l')
+            yq_binary="yq_linux_arm"
+            ;;
+        'arm64-v8a' | 'aarch64')
+            yq_binary="yq_linux_arm64"
+            ;;
+        '32' | 'i386' | 'i686')
+            yq_binary="yq_linux_386"
+            ;;
+        *)
+            colorized_echo red "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+    esac
+
+    local yq_url="${base_url}/${yq_binary}"
+    colorized_echo blue "Downloading yq from ${yq_url}..."
+
+    if ! command -v curl &>/dev/null && ! command -v wget &>/dev/null; then
+        colorized_echo yellow "Neither curl nor wget is installed. Attempting to install curl."
+        install_package curl || {
+            colorized_echo red "Failed to install curl. Please install curl or wget manually."
+            exit 1
+        }
+    fi
+
+
+    if command -v curl &>/dev/null; then
+        if curl -L "$yq_url" -o /usr/local/bin/yq; then
+            chmod +x /usr/local/bin/yq
+            colorized_echo green "yq installed successfully!"
+        else
+            colorized_echo red "Failed to download yq using curl. Please check your internet connection."
+            exit 1
+        fi
+    elif command -v wget &>/dev/null; then
+        if wget -O /usr/local/bin/yq "$yq_url"; then
+            chmod +x /usr/local/bin/yq
+            colorized_echo green "yq installed successfully!"
+        else
+            colorized_echo red "Failed to download yq using wget. Please check your internet connection."
+            exit 1
+        fi
+    fi
+
+
+    if ! echo "$PATH" | grep -q "/usr/local/bin"; then
+        export PATH="/usr/local/bin:$PATH"
+    fi
+
+
+    hash -r
+
+    if command -v yq &>/dev/null; then
+        colorized_echo green "yq is ready to use."
+    elif [ -x "/usr/local/bin/yq" ]; then
+
+        colorized_echo yellow "yq is installed at /usr/local/bin/yq but not found in PATH."
+        colorized_echo yellow "You can add /usr/local/bin to your PATH environment variable."
+    else
+        colorized_echo red "yq installation failed. Please try again or install manually."
+        exit 1
+    fi
+}
+
 is_marzban_installed() {
+    colorized_echo red "Check installed"
     if [ -d $APP_DIR ]; then
         return 0
     else
@@ -227,7 +311,6 @@ is_marzban_installed() {
 
 install_marzban_script() {
     FETCH_REPO="darkringfire/Marzban"
-    BRANCH="master"
     if [[ "$marzban_version" == 'dev' ]] ; then
         BRANCH="dev"
     fi
@@ -237,6 +320,15 @@ install_marzban_script() {
     colorized_echo green "marzban script installed successfully"
 }
 
+install_marzban() {
+    FILES_URL_PREFIX="https://github.com/$FETCH_REPO/raw/$BRANCH"
+
+    mkdir -p "$DATA_DIR"
+    mkdir -p "$APP_DIR"
+
+    curl -sSLO --output-dir $APP_DIR/ $FILES_URL_PREFIX/docker-compose.yml
+}
+
 install_command() {
     check_running_as_root
 
@@ -244,15 +336,6 @@ install_command() {
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
-            --dev)
-                if [[ "$marzban_version_set" == "true" ]]; then
-                    colorized_echo red "Error: Cannot use --dev and --version options simultaneously."
-                    exit 1
-                fi
-                marzban_version="dev"
-                marzban_version_set="true"
-                shift
-            ;;
             *)
                 echo "Unknown option: $1"
                 exit 1
@@ -286,7 +369,9 @@ install_command() {
     detect_compose
 
     install_marzban_script
-
+    install_marzban
+    up_marzban
+    follow_marzban_logs
 
 }
 
@@ -325,6 +410,9 @@ usage() {
     colorized_echo blue "================================"
     echo
 }
+
+colorized_echo red "DEV MODE!!!"
+BRANCH="dev"
 
 case "$1" in
     # up)
